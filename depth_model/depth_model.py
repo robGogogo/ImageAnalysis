@@ -18,55 +18,32 @@ from calibration.calibration import (
 # =============================================================================
 # NYU Depth V2 — RGB-D Point Cloud Reconstruction
 # =============================================================================
-# Calibration parameters sourced from the RGBDemo Calibration Tool.
-#
-# Pipeline:
-#   1. Undistort RGB and depth images using their respective lens models
-#   2. Back-project depth pixels to 3D using depth camera intrinsics
-#   3. Transform 3D points into RGB camera space via extrinsic (R, t)
-#   4. Reconstruct coloured point cloud and visualise with Open3D
-# =============================================================================
-
 
 def make_intrinsics():
-    """
-    Returns the depth camera intrinsic parameters.
-
-    Returns:
-        tuple: (fx_d, fy_d, cx_d, cy_d)
-    """
+    """Returns the depth camera intrinsic parameters."""
     return fx_d, fy_d, cx_d, cy_d
 
 
-def backproject(depth_array, rgb_array, fx, fy, cx, cy, K_d):
+def backproject(depth_array, fx, fy, cx, cy, K_d):
     """
-    Back-projects a depth map into a coloured 3D point cloud.
-
-    Applies lens undistortion to the depth image, converts depth values
-    from millimetres to metres, and reprojects each valid pixel into 3D
-    using the pinhole camera model.
-
-    Args:
-        depth_array (np.ndarray): Raw depth image (H, W), values in mm.
-        rgb_array   (np.ndarray): Undistorted RGB image (H, W, 3), uint8.
-        fx, fy      (float):      Depth camera focal lengths (pixels).
-        cx, cy      (float):      Depth camera principal point (pixels).
-        K_d         (np.ndarray): Depth camera intrinsic matrix (3, 3).
-
-    Returns:
-        points (np.ndarray): 3D point positions (N, 3) in metres.
-        colors (np.ndarray): Normalised RGB colours (N, 3), range [0, 1].
+    Back-projects a depth map into a 3D point cloud.
+    
+    Uses Nearest-Neighbor interpolation to preserve depth boundaries.
     """
-    # Correct lens distortion on the depth image
-    dist_d      = np.array([k1_d, k2_d, p1_d, p2_d, k3_d])
-    depth_array = cv2.undistort(depth_array.astype(np.float32), K_d, dist_d)
+    dist_d = np.array([k1_d, k2_d, p1_d, p2_d, k3_d])
+    h, w = depth_array.shape
+    
+    # Generate maps for undistortion
+    map1, map2 = cv2.initUndistortRectifyMap(K_d, dist_d, None, K_d, (w, h), cv2.CV_32FC1)
+    
+    # Remap depth using Nearest Neighbor to avoid 'interpolated' phantom points
+    depth_undistorted = cv2.remap(depth_array.astype(np.float32), map1, map2, interpolation=cv2.INTER_NEAREST)
 
-    # Build a pixel coordinate grid covering every pixel in the depth image
-    h, w       = depth_array.shape
-    uu, vv     = np.meshgrid(np.arange(w), np.arange(h))
+    # Build a pixel coordinate grid
+    uu, vv = np.meshgrid(np.arange(w), np.arange(h))
 
     # Convert raw depth values from millimetres to metres
-    z = depth_array.astype(np.float32) / 1000.0
+    z = depth_undistorted / 1000.0
 
     # Mask out invalid readings and points exceeding the depth threshold
     valid = (z > 0) & (z <= maxDepth)
@@ -77,83 +54,74 @@ def backproject(depth_array, rgb_array, fx, fy, cx, cy, K_d):
     y = (vv - cy) * z / fy
 
     points = np.stack([x, y, z], axis=-1)   # (N, 3)
-    colors = rgb_array[valid] / 255.0        # (N, 3) normalised
-
-    # -------------------------------------------------------------------------
-    # Potential extra step if have time:
-    # Color alignment using p = KP
-    # where K is camera intrinsics matrix
-    # -------------------------------------------------------------------------
-
-    return points, colors
+    
+    return points
 
 
 def flip_pointcloud(points):
     """
-    Converts from depth camera convention (Y-down) to Open3D convention (Y-up).
-
-    The depth camera coordinate system uses a downward-facing Y axis, which is
-    standard in computer vision. Open3D expects Y-up. Negating Y corrects the
-    orientation without affecting the X (left-right) or Z (depth) axes.
-
-    Args:
-        points (np.ndarray): Point cloud array (N, 3).
-
-    Returns:
-        np.ndarray: Reoriented point cloud (N, 3).
+    Converts from OpenCV (Y-down) to Open3D-friendly (Y-up) view.
+    We only flip Y to avoid mirroring the Z-axis (which makes it look inside-out).
     """
     points = points.copy()
-    points[:, 1] *= -1
+    points[:, 1] *= -1  
     return points
 
 
 def run_depth_model():
     """
-    Loads an RGB-D pair, reconstructs a coloured 3D point cloud, and
-    launches an interactive Open3D visualisation window.
-
-    Processing steps:
-        1. Load RGB and depth images from disk.
-        2. Undistort the RGB image using the calibrated lens model.
-        3. Back-project the depth image to 3D using depth intrinsics.
-        4. Apply the extrinsic transform (R, t) to align points into
-           RGB camera space.
-        5. Correct coordinate convention for Open3D (Y-up).
-        6. Visualise the resulting point cloud.
+    Full pipeline: Load -> Undistort -> Back-project -> Transform -> Align Color -> Visualize
     """
-    rgb_images   = glob("extracted_dataset/images/*.png")
-    depth_images = glob("extracted_dataset/depths/*.png")
+    # 1. Load Data (Sorted to ensure RGB and Depth frames match)
+    rgb_images   = sorted(glob("extracted_dataset/images/*.png"))
+    depth_images = sorted(glob("extracted_dataset/depths/*.png"))
+
+    if not rgb_images or not depth_images:
+        print("Error: No images found in the specified directories.")
+        return
 
     rgb_array   = np.asarray(Image.open(rgb_images[0]).convert("RGB"))
     depth_array = np.asarray(Image.open(depth_images[0]))
 
-    print(f"RGB shape:   {rgb_array.shape}")
-    print(f"Depth shape: {depth_array.shape}")
+    print(f"Processing frame: {rgb_images[0]}")
 
-    # Correct RGB lens distortion prior to colour sampling
+    # 2. Correct RGB lens distortion
     dist_rgb  = np.array([k1_rgb, k2_rgb, p1_rgb, p2_rgb, k3_rgb])
-    rgb_array = cv2.undistort(rgb_array, K_rgb, dist_rgb)
+    rgb_undistorted = cv2.undistort(rgb_array, K_rgb, dist_rgb)
 
-    # Retrieve calibrated depth camera intrinsics
+    # 3. Back-project depth pixels to 3D (meters)
     fx, fy, cx, cy = make_intrinsics()
+    points_depth_space = backproject(depth_array, fx, fy, cx, cy, K_d)
 
-    # Back-project depth pixels to 3D and sample RGB colours
-    points, colors = backproject(depth_array, rgb_array, fx, fy, cx, cy, K_d)
+    # 4. Apply Extrinsic Transform
+    # IMPORTANT: Calibration tool 't' is usually in mm, but points are in meters.
+    t = np.array([t_x, t_y, t_z]) / 1000.0 
+    points_rgb_space = (R @ points_depth_space.T).T + t
 
-    # Apply extrinsic transform: rotate and translate into RGB camera space
-    t      = np.array([t_x, t_y, t_z])
-    points = (R @ points.T).T + t
+    # 5. Color Alignment (Project 3D points onto the 2D RGB image plane)
+    u_rgb = (points_rgb_space[:, 0] * fx_rgb / points_rgb_space[:, 2]) + cx_rgb
+    v_rgb = (points_rgb_space[:, 1] * fy_rgb / points_rgb_space[:, 2]) + cy_rgb
 
-    # Reorient to Open3D coordinate convention (Y-up)
-    points = flip_pointcloud(points)
+    # Round to nearest pixel
+    u_rgb = np.round(u_rgb).astype(int)
+    v_rgb = np.round(v_rgb).astype(int)
 
-    print(f"Point cloud: {len(points):,} points")
-    print(f"Depth range: {points[:, 2].min():.3f}m — {points[:, 2].max():.3f}m")
+    # Filter points that fall outside the RGB camera's field of view
+    h_rgb, w_rgb = rgb_undistorted.shape[:2]
+    valid_mask = (u_rgb >= 0) & (u_rgb < w_rgb) & (v_rgb >= 0) & (v_rgb < h_rgb)
 
-    # Construct and display the Open3D point cloud
+    final_points = points_rgb_space[valid_mask]
+    final_colors = rgb_undistorted[v_rgb[valid_mask], u_rgb[valid_mask]] / 255.0
+
+    # 6. Reorient for Visualization
+    final_points = flip_pointcloud(final_points)
+
+    print(f"Point cloud: {len(final_points):,} points")
+
+    # 7. Construct and display the Open3D point cloud
     pcd        = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points)
-    pcd.colors = o3d.utility.Vector3dVector(colors)
+    pcd.points = o3d.utility.Vector3dVector(final_points)
+    pcd.colors = o3d.utility.Vector3dVector(final_colors)
 
     o3d.visualization.draw_geometries(
         [pcd],
@@ -161,3 +129,6 @@ def run_depth_model():
         width=1200,
         height=800,
     )
+
+if __name__ == "__main__":
+    run_depth_model()
