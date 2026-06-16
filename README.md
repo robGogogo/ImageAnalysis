@@ -12,13 +12,13 @@ A 3D point cloud reconstruction pipeline using RGB-D images, Open3D, and GeoCali
 git clone https://github.com/robGogogo/ImageAnalysis.git
 cd ImageAnalysis
 
-**### 2. Install dependencies**
+### **2. Install dependencies**
 pip install -r requirements.txt
 
-**### 3. Install GeoCalib**
+### **3. Install GeoCalib**
 git clone https://github.com/cvg/GeoCalib.git
 
-**### 4. Download NYU Depth Labeled Dataset V2**
+### **4. Download NYU Depth Labeled Dataset V2**
 **I.**
 
 Go to
@@ -49,7 +49,7 @@ Delete
 placeholder.txt
 ```
 
-**### 5. Extract NYU Dataset**
+### **5. Extract NYU Dataset**
 python utils/extraction/extract.py
 
   ||
@@ -62,7 +62,7 @@ extracted_dataset
      | depths
      | images
 
-**## Project Structure**
+## **Project Structure**
 
 ```
 ImageAnalysis/
