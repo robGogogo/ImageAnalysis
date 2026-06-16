@@ -32,15 +32,18 @@ extracted_dataset
      | images
 
 ## Project Structure
-ImageAnalysis                                                                                                                       
-    |    calibration                                                                                                                      
-    |    depth_model                                                                                                                                                                                                                          
-    |    edge_model
-    |    visualization_open3d     
-    |    extracted_dataset                                                                                                                
-    |    src                                                                                                                              
-    |    toolbox                                                                                                                          
-    |    training_dataset                                                                                                                 
-    |    utils                                                                                                                                                                                                                                                                    
-    |    main.py                                                                                                                          
-    |    requirements.txt
+
+```
+ImageAnalysis/
+├── calibration/
+├── depth_model/
+├── edge_model/
+├── visualization_open3d/
+├── extracted_dataset/
+├── src/
+├── toolbox/
+├── training_dataset/
+├── utils/
+├── main.py
+└── requirements.txt
+```
