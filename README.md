@@ -18,7 +18,29 @@ pip install -r requirements.txt
 ### 3. Install GeoCalib
 git clone https://github.com/cvg/GeoCalib.git
 
-### 4. Extract NYU Dataset
+### 4. Download NYU Depth Labeled Dataset V2
+I.
+Go to
+```
+https://cs.nyu.edu/~fergus/datasets/nyu_depth_v2.html
+```
+Select 
+```
+Labeled dataset (~2.8 GB)
+```
+and download
+
+II.
+Add 
+```
+nyu_depth_v2_labeled
+```
+to folder
+```
+training_dataset
+````
+
+### 5. Extract NYU Dataset
 python utils/extraction/extract.py
 
   ||
