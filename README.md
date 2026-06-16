@@ -8,7 +8,7 @@ A 3D point cloud reconstruction pipeline using RGB-D images, Open3D, and GeoCali
 
 ## Setup
 
-**### 1. Clone the repository**
+### **1. Clone the repository**
 git clone https://github.com/robGogogo/ImageAnalysis.git
 cd ImageAnalysis
 
