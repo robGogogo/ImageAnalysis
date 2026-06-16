@@ -54,8 +54,8 @@ python utils/extraction/extract.py
 
 ```
 extracted_dataset
-├──  depths
-├──  images
+├──  depths/
+├──  images/
 ```
 
 ## **Project Structure**
