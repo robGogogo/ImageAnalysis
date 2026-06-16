@@ -52,15 +52,11 @@ placeholder.txt
 ### **5. Extract NYU Dataset**
 python utils/extraction/extract.py
 
-  ||
-  ||
-------
-\    /
- \  /
- 
+```
 extracted_dataset
-     | depths
-     | images
+├──  depths
+├──  images
+```
 
 ## **Project Structure**
 
